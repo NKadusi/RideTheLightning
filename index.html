@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>מחשבון מרחק וכיוון פגיעה</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { 
+            font-family: system-ui, -apple-system, sans-serif; 
+            text-align: center; 
+            margin: 0; 
+            padding: 20px; 
+            background-color: #121212; 
+            color: #e0e0e0;
+        }
+        .container { 
+            max-width: 500px; 
+            margin: auto; 
+            background: #1e1e1e; 
+            padding: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5); 
+        }
+        h2 { color: #ffffff; margin-bottom: 5px; }
+        .status { font-size: 0.9em; color: #aaaaaa; margin-bottom: 20px; }
+        
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 150px;
+        }
+        
+        .btn-circle { 
+            width: 140px; 
+            height: 140px; 
+            border-radius: 50%; 
+            border: none; 
+            color: white; 
+            font-size: 20px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            transition: transform 0.2s ease; 
+            -webkit-tap-highlight-color: transparent;
+            background-color: #0056b3; 
+        }
+        .btn-circle:active { transform: scale(0.95); }
+
+        @keyframes breatheRed {
+            0% { box-shadow: 0 0 10px rgba(255, 50, 50, 0.4), 0 0 20px rgba(255, 50, 50, 0.4); }
+            50% { box-shadow: 0 0 25px rgba(255, 50, 50, 0.8), 0 0 50px rgba(255, 50, 50, 0.8); }
+            100% { box-shadow: 0 0 10px rgba(255, 50, 50, 0.4), 0 0 20px rgba(255, 50, 50, 0.4); }
+        }
+
+        @keyframes breatheBlue {
+            0% { box-shadow: 0 0 10px rgba(50, 150, 255, 0.4), 0 0 20px rgba(50, 150, 255, 0.4); }
+            50% { box-shadow: 0 0 25px rgba(50, 150, 255, 0.8), 0 0 50px rgba(50, 150, 255, 0.8); }
+            100% { box-shadow: 0 0 10px rgba(50, 150, 255, 0.4), 0 0 20px rgba(50, 150, 255, 0.4); }
+        }
+
+        #btn-light { animation: breatheRed 2.5s infinite ease-in-out; }
+        #btn-boom { display: none; animation: breatheBlue 2.5s infinite ease-in-out; }
+        
+        #results, #history-container { 
+            margin-top: 20px; 
+            font-size: 1.1em; 
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+        #results { display: none; }
+        #results p { margin: 5px 0; font-weight: bold; color: #fff; }
+        
+        #map { 
+            height: 300px; 
+            width: 100%; 
+            margin-top: 20px; 
+            border-radius: 8px; 
+            z-index: 1; 
+            display: none; 
+            filter: invert(90%) hue-rotate(180deg) brightness(95%) contrast(85%);
+        }
+        
+        .btn-whatsapp { 
+            display: none; 
+            background-color: #25D366; 
+            color: white; 
+            padding: 15px 20px; 
+            border-radius: 8px; 
+            text-decoration: none; 
+            font-size: 18px;
+            font-weight: bold; 
+            margin-top: 20px; 
+            border: none; 
+            cursor: pointer; 
+            width: 100%; 
+            box-sizing: border-box; 
+        }
+
+        #history-container { text-align: right; display: none; }
+        #history-container h3 { margin: 0 0 10px 0; font-size: 1.1em; color: #4da8da; border-bottom: 1px solid #444; padding-bottom: 5px;}
+        #history-list { list-style-type: none; padding: 0; margin: 0; font-size: 0.95em; }
+        #history-list li { padding: 8px 0; border-bottom: 1px solid #3a3a3a; display: flex; justify-content: space-between; align-items: center;}
+        #history-list li:last-child { border-bottom: none; }
+        .history-time { color: #888; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>מחשבון פגיעה חכם</h2>
+        <div id="gps-status" class="status">מחפש מיקום וחיישנים... 🛰️</div>
+
+        <div class="controls">
+            <button id="btn-light" class="btn-circle">ראיתי אור ⚡<br><span style="font-size: 12px; font-weight: normal;">(כוון את המכשיר)</span></button>
+            <button id="btn-boom" class="btn-circle">שמעתי בום 💥</button>
+        </div>
+
+        <div id="results">
+            <p>זמן שעבר: <span id="time-val">0</span> שניות</p>
+            <p>מרחק משוער: <span id="dist-val" style="color: #ff4d4d;">0</span> מטרים</p>
+            <p id="azimuth-container" style="display: none; font-size: 0.9em; color: #4da8da;">כיוון (אזימוט): <span id="azimuth-val"></span>°</p>
+        </div>
+
+        <div id="map"></div>
+        
+        <button id="btn-whatsapp" class="btn-whatsapp">שתף דיווח ב-WhatsApp 💬</button>
+
+        <div id="history-container">
+            <h3>היסטוריית מדידות</h3>
+            <ul id="history-list"></ul>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let startTime, endTime;
+        let userLat, userLng;
+        let map, userMarker, radiusCircle, blastMarker, directionLine;
+        const SPEED_OF_SOUND = 340; 
+        let measurementCount = 0; 
+        
+        let currentBearing = null;
+        let savedBearing = null;
+
+        function formatNumber(num) { return num.toLocaleString('he-IL'); }
+        function getCurrentTimeString() { return new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute:'2-digit', second:'2-digit' }); }
+
+        // נוסחת Haversine לחישוב קואורדינטת יעד לפי מרחק וכיוון
+        function calculateDestination(lat, lng, distanceMeters, bearingDegrees) {
+            const R = 6371e3; 
+            const d = distanceMeters;
+            const brng = bearingDegrees * Math.PI / 180; 
+            const lat1 = lat * Math.PI / 180;
+            const lon1 = lng * Math.PI / 180;
+
+            const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d / R) + Math.cos(lat1) * Math.sin(d / R) * Math.cos(brng));
+            const lon2 = lon1 + Math.atan2(Math.sin(brng) * Math.sin(d / R) * Math.cos(lat1), Math.cos(d / R) - Math.sin(lat1) * Math.sin(lat2));
+
+            return { lat: lat2 * 180 / Math.PI, lng: lon2 * 180 / Math.PI };
+        }
+
+        // האזנה לחיישן המצפן
+        function handleOrientation(event) {
+            if (event.webkitCompassHeading) {
+                currentBearing = event.webkitCompassHeading; // iOS
+            } else if (event.alpha != null) {
+                currentBearing = 360 - event.alpha; // Android
+            }
+        }
+
+        // ניסיון הפעלה אוטומטי לאנדרואיד
+        window.addEventListener('deviceorientationabsolute', handleOrientation);
+        window.addEventListener('deviceorientation', handleOrientation);
+
+        // אתחול GPS
+        if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    userLat = position.coords.latitude;
+                    userLng = position.coords.longitude;
+                    document.getElementById('gps-status').innerText = "מיקום נקלט בהצלחה 📍";
+                    initMap(userLat, userLng);
+                },
+                (error) => {
+                    // מיקום גיבוי - רחובות
+                    userLat = 31.8928; userLng = 34.8113;
+                    document.getElementById('gps-status').innerText = "GPS חסום. מציג מיקום לבדיקה 📍";
+                    initMap(userLat, userLng);
+                },
+                { enableHighAccuracy: true }
+            );
+        }
+
+        function initMap(lat, lng) {
+            document.getElementById('map').style.display = 'block';
+            if (!map) {
+                map = L.map('map').setView([lat, lng], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+                userMarker = L.circleMarker([lat, lng], { color: 'white', weight: 2, fillColor: '#3498db', fillOpacity: 1, radius: 8 }).addTo(map).bindPopup("המיקום שלך");
+            }
+        }
+
+        // כפתור: ראיתי אור
+        document.getElementById('btn-light').addEventListener('click', () => {
+            // בקשת הרשאה למצפן באייפון (חובה לעשות זאת בתוך אירוע לחיצה)
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission().then(permissionState => {
+                    if (permissionState === 'granted') window.addEventListener('deviceorientation', handleOrientation);
+                }).catch(console.error);
+            }
+
+            startTime = performance.now();
+            savedBearing = currentBearing; // שמירת הכיוון אליו הטלפון הצביע באותו רגע
+            
+            document.getElementById('btn-light').style.display = 'none';
+            document.getElementById('btn-boom').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('btn-whatsapp').style.display = 'none';
+        });
+
+        // כפתור: שמעתי בום
+        document.getElementById('btn-boom').addEventListener('click', () => {
+            endTime = performance.now();
+            document.getElementById('btn-boom').style.display = 'none';
+            document.getElementById('btn-light').style.display = 'block';
+            
+            let timeSeconds = (endTime - startTime) / 1000;
+            let distanceMeters = Math.round(timeSeconds * SPEED_OF_SOUND);
+
+            document.getElementById('time-val').innerText = formatNumber(parseFloat(timeSeconds.toFixed(2)));
+            document.getElementById('dist-val').innerText = formatNumber(distanceMeters);
+            
+            if(savedBearing !== null) {
+                document.getElementById('azimuth-val').innerText = Math.round(savedBearing);
+                document.getElementById('azimuth-container').style.display = 'block';
+            } else {
+                document.getElementById('azimuth-container').style.display = 'none';
+            }
+            
+            document.getElementById('results').style.display = 'block';
+            addMeasurementToHistory(distanceMeters, timeSeconds, savedBearing);
+
+            if (userLat && userLng) {
+                drawMapFeatures(distanceMeters, savedBearing);
+                setupWhatsApp(distanceMeters, timeSeconds, savedBearing);
+            }
+        });
+
+        function addMeasurementToHistory(distance, time, bearing) {
+            measurementCount++;
+            const historyList = document.getElementById('history-list');
+            document.getElementById('history-container').style.display = 'block';
+            
+            let bearingText = bearing !== null ? `<br><span style="color:#4da8da; font-size:0.85em;">כיוון משוער: ${Math.round(bearing)}°</span>` : '';
+            
+            const li = document.createElement('li');
+            li.innerHTML = `<div>מדידה ${measurementCount}: <strong>${formatNumber(distance)} מטרים</strong><br><span style="font-size:0.85em; color:#bbb;">(${formatNumber(parseFloat(time.toFixed(2)))} שניות)</span>${bearingText}</div> <div class="history-time">${getCurrentTimeString()}</div>`;
+            historyList.insertBefore(li, historyList.firstChild);
+        }
+
+        function drawMapFeatures(radius, bearing) {
+            if(radiusCircle) map.removeLayer(radiusCircle);
+            if(blastMarker) map.removeLayer(blastMarker);
+            if(directionLine) map.removeLayer(directionLine);
+
+            // ציור הרדיוס
+            radiusCircle = L.circle([userLat, userLng], { color: '#ff4d4d', weight: 2, fillColor: '#ff4d4d', fillOpacity: 0.15, radius: radius }).addTo(map);
+            
+            let boundsToFit = radiusCircle.getBounds();
+
+            // אם יש כיוון מהמצפן, צייר קו ונקודה
+            if (bearing !== null) {
+                const target = calculateDestination(userLat, userLng, radius, bearing);
+                
+                blastMarker = L.circleMarker([target.lat, target.lng], {
+                    color: '#ff0000', weight: 2, fillColor: '#ff4d4d', fillOpacity: 1, radius: 6
+                }).addTo(map).bindPopup("מיקום משוער של ההדף").openPopup();
+
+                directionLine = L.polyline([[userLat, userLng], [target.lat, target.lng]], {
+                    color: '#ff4d4d', dashArray: '5, 5', weight: 2
+                }).addTo(map);
+            }
+
+            map.fitBounds(boundsToFit);
+        }
+
+        function setupWhatsApp(distance, time, bearing) {
+            const waBtn = document.getElementById('btn-whatsapp');
+            waBtn.style.display = 'block';
+            
+            let locationLink = '';
+            if (bearing !== null) {
+                const target = calculateDestination(userLat, userLng, distance, bearing);
+                locationLink = `מיקום ההדף המשוער: http://googleusercontent.com/maps.google.com/3${target.lat},${target.lng}`;
+            } else {
+                locationLink = `המיקום שלי: http://googleusercontent.com/maps.google.com/4${userLat},${userLng}`;
+            }
+
+            const text = `⚠️ מדדתי אירוע הדף!\n⏱️ זמן מעבר קול: ${formatNumber(parseFloat(time.toFixed(2)))} שניות.\n📏 מרחק משוער: ${formatNumber(distance)} מטרים מהמיקום שלי.\n📍 ${locationLink}`;
+            waBtn.onclick = () => { window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank'); };
+        }
+    </script>
+</body>
+</html>
