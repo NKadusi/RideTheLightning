@@ -440,7 +440,7 @@
                 });
 
                 blastMarker = L.marker([target.lat, target.lng], { icon: redIcon })
-                    .addTo(map).bindPopup("מיקום משוער של ההדף").openPopup();
+                    .addTo(map).bindPopup("מיקום משוער של הנפילה").openPopup();
 
                 directionLine = L.polyline([[userLat, userLng], [target.lat, target.lng]], {
                     color: '#ff4d4d', dashArray: '8, 8', weight: 3
@@ -459,7 +459,7 @@
             
             if (bearing !== null) {
                 const target = calculateDestination(userLat, userLng, distanceMeters, bearing);
-                locationLink = `מיקום ההדף המשוער: http://googleusercontent.com/maps.google.com/3${target.lat},${target.lng}`;
+                locationLink = `מיקום הנפילה המשוער: http://googleusercontent.com/maps.google.com/3${target.lat},${target.lng}`;
             } else {
                 locationLink = `המיקום שלי: http://googleusercontent.com/maps.google.com/4${userLat},${userLng}`;
             }
