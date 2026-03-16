@@ -49,19 +49,19 @@
         .btn-bottom:active { filter: brightness(1.2); }
 
         @keyframes breatheFire {
-            0% { box-shadow: 0 0 10px rgba(255, 85, 0, 0.2), inset 0 0 5px rgba(255, 85, 0, 0.1); }
-            50% { box-shadow: 0 0 35px rgba(255, 100, 0, 0.8), 0 0 60px rgba(255, 30, 0, 0.5), inset 0 0 25px rgba(255, 100, 0, 0.5); }
-            100% { box-shadow: 0 0 10px rgba(255, 85, 0, 0.2), inset 0 0 5px rgba(255, 85, 0, 0.1); }
+            0%   { box-shadow: 0 0 15px rgba(255, 85, 0, 0.3), inset 0 0 10px rgba(255, 85, 0, 0.2); transform: scale(1); }
+            50%  { box-shadow: 0 0 45px rgba(255, 100, 0, 0.8), 0 0 80px rgba(255, 50, 0, 0.6), inset 0 0 30px rgba(255, 100, 0, 0.6); transform: scale(1.03); }
+            100% { box-shadow: 0 0 15px rgba(255, 85, 0, 0.3), inset 0 0 10px rgba(255, 85, 0, 0.2); transform: scale(1); }
         }
 
         @keyframes breatheLightning {
-            0% { box-shadow: 0 0 10px rgba(0, 150, 255, 0.2), inset 0 0 5px rgba(0, 150, 255, 0.1); }
-            50% { box-shadow: 0 0 35px rgba(0, 200, 255, 0.8), 0 0 60px rgba(0, 100, 255, 0.5), inset 0 0 25px rgba(0, 200, 255, 0.5); }
-            100% { box-shadow: 0 0 10px rgba(0, 150, 255, 0.2), inset 0 0 5px rgba(0, 150, 255, 0.1); }
+            0%   { box-shadow: 0 0 15px rgba(0, 150, 255, 0.3), inset 0 0 10px rgba(0, 150, 255, 0.2); transform: scale(1); }
+            50%  { box-shadow: 0 0 45px rgba(0, 200, 255, 0.8), 0 0 80px rgba(0, 100, 255, 0.6), inset 0 0 30px rgba(0, 200, 255, 0.6); transform: scale(1.03); }
+            100% { box-shadow: 0 0 15px rgba(0, 150, 255, 0.3), inset 0 0 10px rgba(0, 150, 255, 0.2); transform: scale(1); }
         }
 
-        #btn-light { animation: breatheFire 3.5s infinite ease-in-out; }
-        #btn-boom { display: none; animation: breatheLightning 2.5s infinite ease-in-out; }
+        #btn-light { animation: breatheFire 3s infinite ease-in-out; }
+        #btn-boom { display: none; animation: breatheLightning 2s infinite ease-in-out; }
         
         #results, #history-container { 
             margin-top: 20px; 
@@ -91,13 +91,32 @@
             filter: invert(90%) hue-rotate(180deg) brightness(95%) contrast(85%);
         }
         
+        .map-military {
+            filter: invert(90%) sepia(80%) hue-rotate(70deg) saturate(300%) brightness(70%) contrast(120%) !important;
+            transition: filter 0.5s ease;
+        }
+
+        .radar-grid {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 999;
+            display: none;
+            background-image: 
+                linear-gradient(to bottom, transparent calc(50% - 1px), rgba(50, 255, 50, 0.6) calc(50% - 1px), rgba(50, 255, 50, 0.6) calc(50% + 1px), transparent calc(50% + 1px)),
+                linear-gradient(to right, transparent calc(50% - 1px), rgba(50, 255, 50, 0.6) calc(50% - 1px), rgba(50, 255, 50, 0.6) calc(50% + 1px), transparent calc(50% + 1px)),
+                radial-gradient(circle, transparent 15%, rgba(50, 255, 50, 0.5) 15%, rgba(50, 255, 50, 0.5) 16%, transparent 16%),
+                radial-gradient(circle, transparent 30%, rgba(50, 255, 50, 0.5) 30%, rgba(50, 255, 50, 0.5) 31%, transparent 31%),
+                radial-gradient(circle, transparent 45%, rgba(50, 255, 50, 0.5) 45%, rgba(50, 255, 50, 0.5) 46%, transparent 46%);
+        }
+
         .radar-overlay {
             position: absolute;
             top: -50%; left: -50%;
             width: 200%; height: 200%;
             pointer-events: none;
             z-index: 1000;
-            background: conic-gradient(from 0deg at 50% 50%, rgba(255, 77, 77, 0) 75%, rgba(255, 77, 77, 0.4) 100%);
+            background: conic-gradient(from 0deg at 50% 50%, rgba(50, 255, 50, 0) 75%, rgba(50, 255, 50, 0.2) 95%, rgba(50, 255, 50, 0.6) 100%);
             animation: radar-spin 2s linear infinite;
             display: none;
         }
@@ -106,29 +125,29 @@
             position: absolute;
             top: 0; left: calc(50% - 1px);
             width: 2px; height: 50%;
-            background: #ff4d4d;
-            box-shadow: 0 0 15px #ff4d4d;
+            background: #32ff32;
+            box-shadow: 0 0 15px #32ff32, 0 0 5px #ffffff;
         }
         .radar-center {
             position: absolute;
             top: 50%; left: 50%;
-            width: 8px; height: 8px;
-            margin-top: -4px; margin-left: -4px;
-            background: #ff4d4d;
+            width: 10px; height: 10px;
+            margin-top: -5px; margin-left: -5px;
+            background: #32ff32;
             border-radius: 50%;
-            box-shadow: 0 0 10px #ff4d4d, 0 0 20px #ff4d4d;
+            box-shadow: 0 0 10px #32ff32, 0 0 20px #32ff32;
             z-index: 1001;
             display: none;
             pointer-events: none;
-            animation: pulse-radar 1s infinite;
+            animation: pulse-radar 1.5s infinite ease-out;
         }
         @keyframes radar-spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
         @keyframes pulse-radar {
-            0% { transform: scale(1); opacity: 1; }
-            100% { transform: scale(2.5); opacity: 0; }
+            0% { transform: scale(1); opacity: 1; box-shadow: 0 0 10px #32ff32, 0 0 20px #32ff32; }
+            100% { transform: scale(3.5); opacity: 0; box-shadow: 0 0 30px #32ff32, 0 0 50px #32ff32; }
         }
 
         .btn-whatsapp { 
@@ -177,6 +196,7 @@
 
         <div id="map-wrapper">
             <div id="map"></div>
+            <div id="radar-grid" class="radar-grid"></div>
             <div id="radar-overlay" class="radar-overlay"></div>
             <div id="radar-center" class="radar-center"></div>
         </div>
@@ -287,8 +307,10 @@
             document.getElementById('btn-boom').style.display = 'block';
             document.getElementById('results').style.display = 'none';
             document.getElementById('btn-whatsapp').style.display = 'none';
+            document.getElementById('radar-grid').style.display = 'block';
             document.getElementById('radar-overlay').style.display = 'block';
             document.getElementById('radar-center').style.display = 'block';
+            document.getElementById('map').classList.add('map-military');
         });
 
         // כפתור: שמעתי פיצוץ
@@ -296,8 +318,10 @@
             endTime = performance.now();
             document.getElementById('btn-boom').style.display = 'none';
             document.getElementById('btn-light').style.display = 'block';
+            document.getElementById('radar-grid').style.display = 'none';
             document.getElementById('radar-overlay').style.display = 'none';
             document.getElementById('radar-center').style.display = 'none';
+            document.getElementById('map').classList.remove('map-military');
             
             let timeSeconds = (endTime - startTime) / 1000;
             let distanceMeters = Math.round(timeSeconds * SPEED_OF_SOUND);
@@ -364,8 +388,10 @@
             document.getElementById('history-container').style.display = 'none';
             document.getElementById('results').style.display = 'none';
             document.getElementById('btn-whatsapp').style.display = 'none';
+            document.getElementById('radar-grid').style.display = 'none';
             document.getElementById('radar-overlay').style.display = 'none';
             document.getElementById('radar-center').style.display = 'none';
+            document.getElementById('map').classList.remove('map-military');
             
             if(radiusCircle) map.removeLayer(radiusCircle);
             if(blastMarker) map.removeLayer(blastMarker);
