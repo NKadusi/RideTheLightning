@@ -11,6 +11,8 @@
             text-align: center; 
             margin: 0; 
             padding: 20px; 
+            /* הוספת ריווח תחתון כדי שהתוכן לא יוסתר מאחורי הכפתור הצף */
+            padding-bottom: 180px; 
             background-color: #121212; 
             color: #e0e0e0;
         }
@@ -25,11 +27,17 @@
         h2 { color: #ffffff; margin-bottom: 5px; }
         .status { font-size: 0.9em; color: #aaaaaa; margin-bottom: 20px; }
         
+        /* עיגון הכפתורים לתחתית המסך */
         .controls {
+            position: fixed;
+            bottom: 30px;
+            left: 0;
+            width: 100%;
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 150px;
+            z-index: 1000;
+            pointer-events: none; /* מאפשר לחיצה על אלמנטים מאחורי השורה השקופה */
         }
         
         .btn-circle { 
@@ -44,19 +52,21 @@
             transition: transform 0.2s ease; 
             -webkit-tap-highlight-color: transparent;
             background-color: #0056b3; 
+            pointer-events: auto; /* מחזיר את יכולת הלחיצה לכפתור עצמו */
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6); /* צל מודגש יותר לכפתור צף */
         }
         .btn-circle:active { transform: scale(0.95); }
 
         @keyframes breatheRed {
-            0% { box-shadow: 0 0 10px rgba(255, 50, 50, 0.4), 0 0 20px rgba(255, 50, 50, 0.4); }
-            50% { box-shadow: 0 0 25px rgba(255, 50, 50, 0.8), 0 0 50px rgba(255, 50, 50, 0.8); }
-            100% { box-shadow: 0 0 10px rgba(255, 50, 50, 0.4), 0 0 20px rgba(255, 50, 50, 0.4); }
+            0% { box-shadow: 0 0 15px rgba(255, 50, 50, 0.5), 0 0 30px rgba(255, 50, 50, 0.5); }
+            50% { box-shadow: 0 0 35px rgba(255, 50, 50, 0.9), 0 0 60px rgba(255, 50, 50, 0.9); }
+            100% { box-shadow: 0 0 15px rgba(255, 50, 50, 0.5), 0 0 30px rgba(255, 50, 50, 0.5); }
         }
 
         @keyframes breatheBlue {
-            0% { box-shadow: 0 0 10px rgba(50, 150, 255, 0.4), 0 0 20px rgba(50, 150, 255, 0.4); }
-            50% { box-shadow: 0 0 25px rgba(50, 150, 255, 0.8), 0 0 50px rgba(50, 150, 255, 0.8); }
-            100% { box-shadow: 0 0 10px rgba(50, 150, 255, 0.4), 0 0 20px rgba(50, 150, 255, 0.4); }
+            0% { box-shadow: 0 0 15px rgba(50, 150, 255, 0.5), 0 0 30px rgba(50, 150, 255, 0.5); }
+            50% { box-shadow: 0 0 35px rgba(50, 150, 255, 0.9), 0 0 60px rgba(50, 150, 255, 0.9); }
+            100% { box-shadow: 0 0 15px rgba(50, 150, 255, 0.5), 0 0 30px rgba(50, 150, 255, 0.5); }
         }
 
         #btn-light { animation: breatheRed 2.5s infinite ease-in-out; }
@@ -99,23 +109,32 @@
             box-sizing: border-box; 
         }
 
-        #history-container { text-align: right; display: none; }
+        #history-container { text-align: right; display: none; margin-bottom: 20px; }
         #history-container h3 { margin: 0 0 10px 0; font-size: 1.1em; color: #4da8da; border-bottom: 1px solid #444; padding-bottom: 5px;}
         #history-list { list-style-type: none; padding: 0; margin: 0; font-size: 0.95em; }
-        #history-list li { padding: 8px 0; border-bottom: 1px solid #3a3a3a; display: flex; justify-content: space-between; align-items: center;}
+        #history-list li { padding: 12px 0; border-bottom: 1px solid #3a3a3a; display: flex; justify-content: space-between; align-items: center;}
         #history-list li:last-child { border-bottom: none; }
-        .history-time { color: #888; font-size: 0.9em; }
+        .history-time { color: #888; font-size: 0.9em; margin-bottom: 5px; }
+        
+        /* עיצוב כפתור המפה בהיסטוריה */
+        .history-map-btn {
+            display: inline-block;
+            background-color: #333;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 0.85em;
+            border: 1px solid #555;
+            transition: background 0.2s;
+        }
+        .history-map-btn:active { background-color: #444; }
     </style>
 </head>
 <body>
     <div class="container">
         <h2>מחשבון פגיעה חכם</h2>
         <div id="gps-status" class="status">מחפש מיקום וחיישנים... 🛰️</div>
-
-        <div class="controls">
-            <button id="btn-light" class="btn-circle">ראיתי אור ⚡<br><span style="font-size: 12px; font-weight: normal;">(כוון את המכשיר)</span></button>
-            <button id="btn-boom" class="btn-circle">שמעתי בום 💥</button>
-        </div>
 
         <div id="results">
             <p>זמן שעבר: <span id="time-val">0</span> שניות</p>
@@ -133,6 +152,11 @@
         </div>
     </div>
 
+    <div class="controls">
+        <button id="btn-light" class="btn-circle">ראיתי אור ⚡<br><span style="font-size: 12px; font-weight: normal;">(כוון את המכשיר)</span></button>
+        <button id="btn-boom" class="btn-circle">שמעתי בום 💥</button>
+    </div>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         let startTime, endTime;
@@ -147,7 +171,6 @@
         function formatNumber(num) { return num.toLocaleString('he-IL'); }
         function getCurrentTimeString() { return new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute:'2-digit', second:'2-digit' }); }
 
-        // נוסחת Haversine לחישוב קואורדינטת יעד לפי מרחק וכיוון
         function calculateDestination(lat, lng, distanceMeters, bearingDegrees) {
             const R = 6371e3; 
             const d = distanceMeters;
@@ -161,20 +184,17 @@
             return { lat: lat2 * 180 / Math.PI, lng: lon2 * 180 / Math.PI };
         }
 
-        // האזנה לחיישן המצפן
         function handleOrientation(event) {
             if (event.webkitCompassHeading) {
-                currentBearing = event.webkitCompassHeading; // iOS
+                currentBearing = event.webkitCompassHeading; 
             } else if (event.alpha != null) {
-                currentBearing = 360 - event.alpha; // Android
+                currentBearing = 360 - event.alpha; 
             }
         }
 
-        // ניסיון הפעלה אוטומטי לאנדרואיד
         window.addEventListener('deviceorientationabsolute', handleOrientation);
         window.addEventListener('deviceorientation', handleOrientation);
 
-        // אתחול GPS
         if ("geolocation" in navigator) {
             navigator.geolocation.getCurrentPosition(
                 (position) => {
@@ -184,7 +204,6 @@
                     initMap(userLat, userLng);
                 },
                 (error) => {
-                    // מיקום גיבוי - רחובות
                     userLat = 31.8928; userLng = 34.8113;
                     document.getElementById('gps-status').innerText = "GPS חסום. מציג מיקום לבדיקה 📍";
                     initMap(userLat, userLng);
@@ -202,9 +221,7 @@
             }
         }
 
-        // כפתור: ראיתי אור
         document.getElementById('btn-light').addEventListener('click', () => {
-            // בקשת הרשאה למצפן באייפון (חובה לעשות זאת בתוך אירוע לחיצה)
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 DeviceOrientationEvent.requestPermission().then(permissionState => {
                     if (permissionState === 'granted') window.addEventListener('deviceorientation', handleOrientation);
@@ -212,7 +229,7 @@
             }
 
             startTime = performance.now();
-            savedBearing = currentBearing; // שמירת הכיוון אליו הטלפון הצביע באותו רגע
+            savedBearing = currentBearing; 
             
             document.getElementById('btn-light').style.display = 'none';
             document.getElementById('btn-boom').style.display = 'block';
@@ -220,7 +237,6 @@
             document.getElementById('btn-whatsapp').style.display = 'none';
         });
 
-        // כפתור: שמעתי בום
         document.getElementById('btn-boom').addEventListener('click', () => {
             endTime = performance.now();
             document.getElementById('btn-boom').style.display = 'none';
@@ -253,10 +269,32 @@
             const historyList = document.getElementById('history-list');
             document.getElementById('history-container').style.display = 'block';
             
-            let bearingText = bearing !== null ? `<br><span style="color:#4da8da; font-size:0.85em;">כיוון משוער: ${Math.round(bearing)}°</span>` : '';
+            let targetLat = userLat;
+            let targetLng = userLng;
+            let bearingText = '';
             
+            if (bearing !== null) {
+                bearingText = `<br><span style="color:#4da8da; font-size:0.85em;">כיוון משוער: ${Math.round(bearing)}°</span>`;
+                const target = calculateDestination(userLat, userLng, distance, bearing);
+                targetLat = target.lat;
+                targetLng = target.lng;
+            }
+            
+            // יצירת קישור למפות גוגל עבור המדידה הספציפית
+            const googleMapsLink = `https://maps.google.com/?q=${targetLat},${targetLng}`;
+
             const li = document.createElement('li');
-            li.innerHTML = `<div>מדידה ${measurementCount}: <strong>${formatNumber(distance)} מטרים</strong><br><span style="font-size:0.85em; color:#bbb;">(${formatNumber(parseFloat(time.toFixed(2)))} שניות)</span>${bearingText}</div> <div class="history-time">${getCurrentTimeString()}</div>`;
+            li.innerHTML = `
+                <div>
+                    מדידה ${measurementCount}: <strong>${formatNumber(distance)} מטרים</strong><br>
+                    <span style="font-size:0.85em; color:#bbb;">(${formatNumber(parseFloat(time.toFixed(2)))} שניות)</span>
+                    ${bearingText}
+                </div> 
+                <div style="text-align: left;">
+                    <div class="history-time">${getCurrentTimeString()}</div>
+                    <a href="${googleMapsLink}" target="_blank" class="history-map-btn">📍 פתח מפה</a>
+                </div>
+            `;
             historyList.insertBefore(li, historyList.firstChild);
         }
 
@@ -265,12 +303,10 @@
             if(blastMarker) map.removeLayer(blastMarker);
             if(directionLine) map.removeLayer(directionLine);
 
-            // ציור הרדיוס
             radiusCircle = L.circle([userLat, userLng], { color: '#ff4d4d', weight: 2, fillColor: '#ff4d4d', fillOpacity: 0.15, radius: radius }).addTo(map);
             
             let boundsToFit = radiusCircle.getBounds();
 
-            // אם יש כיוון מהמצפן, צייר קו ונקודה
             if (bearing !== null) {
                 const target = calculateDestination(userLat, userLng, radius, bearing);
                 
@@ -293,9 +329,9 @@
             let locationLink = '';
             if (bearing !== null) {
                 const target = calculateDestination(userLat, userLng, distance, bearing);
-                locationLink = `מיקום ההדף המשוער: http://googleusercontent.com/maps.google.com/3${target.lat},${target.lng}`;
+                locationLink = `מיקום ההדף המשוער: https://maps.google.com/?q=${target.lat},${target.lng}`;
             } else {
-                locationLink = `המיקום שלי: http://googleusercontent.com/maps.google.com/4${userLat},${userLng}`;
+                locationLink = `המיקום שלי: https://maps.google.com/?q=${userLat},${userLng}`;
             }
 
             const text = `⚠️ מדדתי אירוע הדף!\n⏱️ זמן מעבר קול: ${formatNumber(parseFloat(time.toFixed(2)))} שניות.\n📏 מרחק משוער: ${formatNumber(distance)} מטרים מהמיקום שלי.\n📍 ${locationLink}`;
