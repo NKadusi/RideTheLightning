@@ -4,6 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>מחשבון מרחק וכיוון פגיעה</title>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-GD72Y4WHLE"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-GD72Y4WHLE');
+    </script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body { 
@@ -289,6 +298,11 @@
             document.getElementById('btn-whatsapp').style.display = 'none';
             document.getElementById('radar-overlay').style.display = 'block';
             document.getElementById('radar-center').style.display = 'block';
+        
+        // מעקב גוגל אנליטיקס ללחיצה על כפתור ההבזק
+        if (typeof gtag === 'function') {
+            gtag('event', 'flash_clicked', { 'event_category': 'interaction' });
+        }
         });
 
         // כפתור: שמעתי פיצוץ
@@ -355,6 +369,15 @@
             if (userLat && userLng) {
                 drawMapFeatures(distanceMeters, savedBearing);
             }
+        
+        // מעקב גוגל אנליטיקס ללחיצה על כפתור הפיצוץ (כולל נתוני המדידה)
+        if (typeof gtag === 'function') {
+            gtag('event', 'boom_clicked', {
+                'event_category': 'measurement',
+                'distance_meters': distanceMeters,
+                'time_seconds': parseFloat(timeSeconds.toFixed(2))
+            });
+        }
         });
 
         // כפתור: איפוס מדידות
