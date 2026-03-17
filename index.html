@@ -162,6 +162,14 @@
             100% { transform: scale(2.5); opacity: 0; }
         }
 
+        .alert-zone {
+            animation: pulse-alert 2s infinite alternate;
+        }
+        @keyframes pulse-alert {
+            0% { fill-opacity: 0.2; stroke-width: 1; }
+            100% { fill-opacity: 0.6; stroke-width: 3; box-shadow: 0 0 10px red; }
+        }
+
         .btn-whatsapp { 
             display: none; 
             background-color: #1b8743; 
@@ -248,6 +256,8 @@
         let savedLat = null, savedLng = null;
         let userDirectionMarker = null;
         let lockedDirectionLine = null;
+        let alertLayers = []; // מערך לשמירת אזורי ההתרעה על המפה
+        const cityCoordinatesCache = {}; // מטמון לשמירת קואורדינטות של ערים למניעת עומס
 
         function formatNumber(num) { return num.toLocaleString('he-IL'); }
         function getCurrentTimeString() { return new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute:'2-digit', second:'2-digit' }); }
@@ -482,6 +492,9 @@
 
             if (savedLat && savedLng) {
                 drawMapFeatures(distanceMeters, savedBearing);
+                
+                // קריאה לפונקציה שמחפשת ומציירת את אזעקות האמת מהדקות האחרונות
+                fetchAndDrawRecentAlerts();
             }
         
         // מעקב גוגל אנליטיקס ללחיצה על כפתור הפיצוץ (כולל נתוני המדידה)
@@ -511,6 +524,11 @@
                 map.removeLayer(lockedDirectionLine);
                 lockedDirectionLine = null;
             }
+            
+            // מחיקת אזורי אזעקה קודמים
+            alertLayers.forEach(layer => map.removeLayer(layer));
+            alertLayers = [];
+            
             if (userLat && userLng) {
                 map.setView([userLat, userLng], 13);
             }
@@ -578,6 +596,84 @@
             }
 
             map.fitBounds(boundsToFit);
+        }
+
+        // משיכת התרעות אמת מפיקוד העורף וציורן
+        function fetchAndDrawRecentAlerts() {
+            alertLayers.forEach(layer => map.removeLayer(layer));
+            alertLayers = [];
+
+            // שימוש ב-CORS Proxy כדי לעקוף את חסימת הדפדפן מול שרתי פיקוד העורף
+            const orefUrl = 'https://www.oref.org.il/WarningMessages/History/AlertsHistory.json';
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(orefUrl)}`;
+
+            fetch(proxyUrl)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.contents) {
+                        const alerts = JSON.parse(data.contents);
+                        processAlerts(alerts);
+                    }
+                })
+                .catch(error => console.error("שגיאה במשיכת התרעות מפיקוד העורף:", error));
+        }
+
+        function processAlerts(alerts) {
+            if (!Array.isArray(alerts)) return;
+            const now = new Date();
+            const recentCities = new Set();
+
+            alerts.forEach(alert => {
+                // המרת תאריך למבנה בטוח (החלפת מקפים בלוכסנים למניעת שגיאות בדפדפנים מסוימים)
+                const alertTime = new Date(alert.date.replace(/-/g, '/'));
+                const diffMinutes = (now - alertTime) / (1000 * 60);
+
+                // סינון: רק אזעקות מה-15 דקות האחרונות
+                if (diffMinutes >= 0 && diffMinutes <= 15) {
+                    recentCities.add(alert.data); // alert.data מכיל את שם היישוב
+                }
+            });
+
+            // המרת שמות יישובים לקואורדינטות עם השהייה קלה (כדי לא להיחסם ב-OpenStreetMap)
+            let delay = 0;
+            recentCities.forEach(cityName => {
+                setTimeout(() => geocodeAndDrawAlert(cityName), delay);
+                delay += 1100; 
+            });
+        }
+
+        function geocodeAndDrawAlert(cityName) {
+            // ניקוי שם העיר (למשל 'אשדוד - א' הופך ל-'אשדוד') כדי לשפר את תוצאות החיפוש במפה
+            const searchName = cityName.split('-')[0].trim();
+
+            // שימוש במטמון אם כבר חיפשנו את העיר הזו באותו סשן
+            if (cityCoordinatesCache[searchName]) {
+                drawAlertCircle(cityCoordinatesCache[searchName], cityName);
+                return;
+            }
+
+            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchName + ', ישראל')}&limit=1`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.length > 0) {
+                        const coords = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+                        cityCoordinatesCache[searchName] = coords;
+                        drawAlertCircle(coords, cityName);
+                    }
+                })
+                .catch(e => console.error("שגיאה במציאת קואורדינטות לעיר:", searchName));
+        }
+
+        function drawAlertCircle(coords, originalName) {
+            const alertCircle = L.circle([coords.lat, coords.lng], {
+                color: '#ff0000',
+                fillColor: '#ff0000',
+                weight: 2,
+                radius: 1500, // רדיוס של קילומטר וחצי שמייצג את אזור ההתרעה
+                className: 'alert-zone'
+            }).addTo(map).bindPopup(`<b style='color:red;'>התרעת צבע אדום</b><br>${originalName}`);
+            
+            alertLayers.push(alertCircle);
         }
 
         function setupWhatsApp(distanceKm, time, bearing, distanceMeters, cityName = null) {
