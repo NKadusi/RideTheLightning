@@ -262,7 +262,7 @@
             <ul id="history-list"></ul>
         </div>
         
-        <div class="version">גרסה 1.5</div>
+        <div class="version">גרסה 1.7</div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -658,15 +658,19 @@
             alertLayers.forEach(layer => map.removeLayer(layer));
             alertLayers = [];
 
-            // שימוש ב-CORS Proxy כדי לעקוף את חסימת הדפדפן מול שרתי פיקוד העורף
+            // נלמד מהספרייה idodov/RedAlert: פנייה ל-API הרשמי של פיקוד העורף
+            // כיוון שהדפדפן חוסם בקשות ישירות (CORS), אנו משתמשים בפרוקסי שקוף שמעביר את ההדרים הנדרשים
             const orefUrl = 'https://www.oref.org.il/WarningMessages/History/AlertsHistory.json';
-            const proxyUrl = `https://api.allorigins.win/get?disableCache=true&url=${encodeURIComponent(orefUrl)}`;
+            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(orefUrl)}`;
 
-            fetch(proxyUrl)
+            fetch(proxyUrl, { 
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                cache: 'no-store' 
+            })
                 .then(response => response.json())
-                .then(data => {
-                    if (data && data.contents) {
-                        const alerts = JSON.parse(data.contents);
+                .then(alerts => {
+                    // הנתונים חוזרים כמערך נקי של התרעות, בדיוק כמו בספרייה המקורית
+                    if (alerts && Array.isArray(alerts)) {
                         processAlerts(alerts);
                     } else {
                         document.getElementById('alert-status').style.display = 'none';
