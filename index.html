@@ -262,7 +262,7 @@
             <ul id="history-list"></ul>
         </div>
         
-        <div class="version">גרסה 1.7</div>
+        <div class="version">גרסה 1.8.1</div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -658,29 +658,45 @@
             alertLayers.forEach(layer => map.removeLayer(layer));
             alertLayers = [];
 
-            // נלמד מהספרייה idodov/RedAlert: פנייה ל-API הרשמי של פיקוד העורף
-            // כיוון שהדפדפן חוסם בקשות ישירות (CORS), אנו משתמשים בפרוקסי שקוף שמעביר את ההדרים הנדרשים
+            // מנגנון גיבוי חכם: ניסיון משיכה ממספר שרתי פרוקסי שונים למקרה שאחד מהם נופל או נחסם
             const orefUrl = 'https://www.oref.org.il/WarningMessages/History/AlertsHistory.json';
-            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(orefUrl)}`;
+            const proxies = [
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(orefUrl)}`, // אופציה 1: מחזיר JSON נקי ללא עטיפה
+                `https://api.codetabs.com/v1/proxy?quest=${orefUrl}`,                // אופציה 2: פרוקסי חלופי אמין
+                `https://corsproxy.io/?${encodeURIComponent(orefUrl)}`               // אופציה 3: הפרוקסי הקודם כגיבוי אחרון
+            ];
 
-            fetch(proxyUrl, { 
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                cache: 'no-store' 
-            })
-                .then(response => response.json())
-                .then(alerts => {
-                    // הנתונים חוזרים כמערך נקי של התרעות, בדיוק כמו בספרייה המקורית
-                    if (alerts && Array.isArray(alerts)) {
-                        processAlerts(alerts);
-                    } else {
-                        document.getElementById('alert-status').style.display = 'none';
+            (async function fetchWithFallback() {
+                let success = false;
+                for (const proxyUrl of proxies) {
+                    try {
+                        // הסרנו הדרים מותאמים אישית כדי למנוע בקשות Preflight (OPTIONS) שהדפדפן שולח ועלולות להיחסם
+                        const response = await fetch(proxyUrl, { cache: 'no-store' });
+                        if (!response.ok) continue;
+                        
+                        const textData = await response.text();
+                        // פיקוד העורף מחזיר לעיתים מחרוזת ריקה אם אין התרעות, או JSON תקין
+                        let alerts = [];
+                        if (textData.trim().startsWith('[')) {
+                            alerts = JSON.parse(textData);
+                        }
+                        
+                        if (Array.isArray(alerts)) {
+                            processAlerts(alerts);
+                            success = true;
+                            break; // הצלחנו! יוצאים מהלולאה ולא מנסים את השרתים הבאים
+                        }
+                    } catch (error) {
+                        console.warn(`Proxy failed: ${proxyUrl}`);
                     }
-                })
-                .catch(error => {
-                    console.error("שגיאה במשיכת התרעות מפיקוד העורף:", error);
+                }
+
+                if (!success) {
+                    console.error("שגיאה במשיכת התרעות מכל שרתי הפרוקסי");
                     document.getElementById('alert-status').style.display = 'block';
-                    document.getElementById('alert-status').innerText = "שגיאה בתקשורת מול פיקוד העורף ❌";
-                });
+                    document.getElementById('alert-status').innerText = "שגיאה בתקשורת מול פיקוד העורף (נסה שוב מאוחר יותר) ❌";
+                }
+            })();
         }
 
         function processAlerts(alerts) {
