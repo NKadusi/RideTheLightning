@@ -275,7 +275,7 @@
             <ul id="history-list"></ul>
         </div>
         
-        <div class="version">גרסה 1.8.3</div>
+        <div class="version">גרסה 1.8.4</div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -469,8 +469,14 @@
             try {
                 if (!citiesCache) {
                     // שאיבת רשימת הערים והקואורדינטות מהגיטהאב של idodov/RedAlert
-                    const res = await fetch('https://raw.githubusercontent.com/idodov/RedAlert/master/src/cities.json');
-                    citiesCache = await res.json();
+                    let res = await fetch('https://raw.githubusercontent.com/idodov/RedAlert/master/src/cities.json');
+                    if (!res.ok) { // גיבוי לנתיב נוסף במקרה שהקובץ נמצא בתיקייה הראשית
+                        res = await fetch('https://raw.githubusercontent.com/idodov/RedAlert/master/cities.json');
+                    }
+                    if (!res.ok) throw new Error("לא ניתן לגשת לקובץ הערים בגיטהאב");
+                    
+                    const data = await res.json();
+                    citiesCache = data.cities || data; // תמיכה במבנים שונים של הקובץ
                 }
 
                 const heatData = [];
@@ -480,16 +486,20 @@
                 // יצרנו כאן סימולציית משקלים (Intensity) שנוטה לאזורי צפון ודרום כדי להדגים את מפת החום.
                 // במערכת אמיתית, כאן תשלוף את סך האזעקות לחודש לכל עיר ממסד הנתונים שלך ותזין אותם במקום המספר האקראי.
                 citiesArray.forEach(city => {
-                    if (city.lat && city.lng) {
+                    // תמיכה במספר פורמטים של שמות קואורדינטות
+                    const lat = city.lat || city.latitude;
+                    const lng = city.lng || city.lon || city.longitude;
+                    
+                    if (lat && lng) {
                         let mockAlertsCount = 0;
-                        if (city.lat > 32.8 || city.lat < 31.5) { // רוב האזעקות בצפון ובדרום
+                        if (lat > 32.8 || lat < 31.5) { // רוב האזעקות בצפון ובדרום
                             mockAlertsCount = Math.random() > 0.3 ? Math.random() * 10 : 0;
                         } else {
                             mockAlertsCount = Math.random() > 0.9 ? Math.random() * 3 : 0;
                         }
                         
                         if (mockAlertsCount > 0) {
-                            heatData.push([city.lat, city.lng, mockAlertsCount]);
+                            heatData.push([parseFloat(lat), parseFloat(lng), mockAlertsCount]);
                         }
                     }
                 });
