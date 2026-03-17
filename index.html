@@ -253,23 +253,36 @@
         window.addEventListener('deviceorientation', handleOrientation);
 
         // אתחול GPS
-        if ("geolocation" in navigator) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    userLat = position.coords.latitude;
-                    userLng = position.coords.longitude;
-                    document.getElementById('gps-status').innerText = "מיקום נקלט בהצלחה 📍";
-                    initMap(userLat, userLng);
-                },
-                (error) => {
-                    // מיקום גיבוי - רחובות
-                    userLat = 31.8928; userLng = 34.8113;
-                    document.getElementById('gps-status').innerText = "GPS חסום. מציג מיקום לבדיקה 📍";
-                    initMap(userLat, userLng);
-                },
-                { enableHighAccuracy: true }
-            );
+        function requestLocation() {
+            document.getElementById('gps-status').innerHTML = "מחפש מיקום... 🛰️";
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userLat = position.coords.latitude;
+                        userLng = position.coords.longitude;
+                        document.getElementById('gps-status').innerText = "מיקום נקלט בהצלחה 📍";
+                        initMap(userLat, userLng);
+                        if(userMarker && map) {
+                            userMarker.setLatLng([userLat, userLng]);
+                            map.setView([userLat, userLng], 13);
+                        }
+                    },
+                    (error) => {
+                        // מיקום גיבוי - רחובות
+                        userLat = 31.8928; userLng = 34.8113;
+                        document.getElementById('gps-status').innerHTML = "המיקום חסום. מציג מיקום לבדיקה 📍<br><button onclick='requestLocation()' style='margin-top: 8px; padding: 6px 15px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;'>נסה שוב לאשר מיקום</button>";
+                        initMap(userLat, userLng);
+                        
+                        if(error.code === 1) { // PERMISSION_DENIED
+                            alert("הדפדפן חסם את הגישה למיקום.\n\nבאייפון ודא ש:\n1. שירותי המיקום דולקים (הגדרות -> פרטיות -> שירותי מיקום).\n2. דפדפן Safari מורשה לגשת למיקום.\n3. האתר נטען בכתובת מאובטחת מתחילה ב-HTTPS.");
+                        }
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            }
         }
+        
+        requestLocation();
 
         function initMap(lat, lng) {
             document.getElementById('map-wrapper').style.display = 'block';
