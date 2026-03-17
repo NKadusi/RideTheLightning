@@ -275,7 +275,7 @@
             <ul id="history-list"></ul>
         </div>
         
-        <div class="version">גרסה 1.8.4</div>
+        <div class="version">גרסה 1.8.5</div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -468,15 +468,37 @@
 
             try {
                 if (!citiesCache) {
-                    // שאיבת רשימת הערים והקואורדינטות מהגיטהאב של idodov/RedAlert
-                    let res = await fetch('https://raw.githubusercontent.com/idodov/RedAlert/master/src/cities.json');
-                    if (!res.ok) { // גיבוי לנתיב נוסף במקרה שהקובץ נמצא בתיקייה הראשית
-                        res = await fetch('https://raw.githubusercontent.com/idodov/RedAlert/master/cities.json');
-                    }
-                    if (!res.ok) throw new Error("לא ניתן לגשת לקובץ הערים בגיטהאב");
+                    // ננסה לשאוב מ-main או master מהגיטהאב
+                    const urls = [
+                        'https://raw.githubusercontent.com/idodov/RedAlert/main/src/cities.json',
+                        'https://raw.githubusercontent.com/idodov/RedAlert/master/src/cities.json',
+                        'https://raw.githubusercontent.com/idodov/RedAlert/main/cities.json'
+                    ];
                     
-                    const data = await res.json();
-                    citiesCache = data.cities || data; // תמיכה במבנים שונים של הקובץ
+                    let data = null;
+                    for (const url of urls) {
+                        try {
+                            const res = await fetch(url);
+                            if (res.ok) {
+                                data = await res.json();
+                                break;
+                            }
+                        } catch (e) {}
+                    }
+                    
+                    if (data) {
+                        citiesCache = data.cities || data;
+                    } else {
+                        // גיבוי מקומי במקרה שכל הקישורים לגיטהאב שבורים או חסומים
+                        console.warn("משתמש בנתוני ערים מקומיים כגיבוי");
+                        citiesCache = [
+                            { lat: 32.0853, lng: 34.7818 }, { lat: 31.7683, lng: 35.2137 },
+                            { lat: 32.7940, lng: 34.9896 }, { lat: 31.2518, lng: 34.7913 },
+                            { lat: 31.8044, lng: 34.6553 }, { lat: 31.5250, lng: 34.5956 },
+                            { lat: 33.2073, lng: 35.5697 }, { lat: 31.6693, lng: 34.5715 },
+                            { lat: 32.9646, lng: 35.4960 }, { lat: 32.9331, lng: 35.0827 }
+                        ];
+                    }
                 }
 
                 const heatData = [];
