@@ -249,8 +249,7 @@
             <ul id="history-list"></ul>
         </div>
         
-        <div class="version">גרסה 1.0</div>
-        <div class="version">גרסה 1.1</div>
+        <div class="version">גרסה 1.2</div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -358,7 +357,7 @@
 
         let isCompassUpdating = false;
         let currentVisualBearing = null;
-        const COMPASS_SMOOTHING_FACTOR = 0.15; // פקטור החלקה לקבלת תנועה חלקה ויציבה
+        const COMPASS_SMOOTHING_FACTOR = 0.05; // פקטור החלקה מוקטן לסינון רעידות המכשיר
 
         function handleContinuousOrientation(event) {
             let bearing = null;
@@ -376,7 +375,9 @@
                     if (diff > 180) diff -= 360;
                     
                     // הפעלת פילטר החלקה (Low-Pass Filter)
-                    currentVisualBearing += diff * COMPASS_SMOOTHING_FACTOR;
+                    if (Math.abs(diff) > 0.5) { // התעלמות מתנודות קטנות כדי למנוע רעידות חזותיות
+                        currentVisualBearing += diff * COMPASS_SMOOTHING_FACTOR;
+                    }
                 }
                 
                 // שמירת הכיוון המנורמל עבור החישובים המתמטיים (0-360)
@@ -388,7 +389,7 @@
                         const cone = document.getElementById('direction-cone');
                         if (cone) {
                             cone.style.display = 'block';
-                            cone.style.transform = `rotate(${currentVisualBearing}deg)`;
+                            cone.style.transform = `rotate(${currentVisualBearing.toFixed(1)}deg)`;
                         }
                         document.getElementById('btn-enable-compass').style.display = 'none';
                         isCompassUpdating = false;
