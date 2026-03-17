@@ -71,7 +71,6 @@
             -webkit-mask-image: radial-gradient(circle at center, black 0%, transparent 60%);
             mask-image: radial-gradient(circle at center, black 0%, transparent 60%);
             transform-origin: center center;
-            transition: transform 0.1s ease-out;
             display: none;
         }
         
@@ -207,6 +206,13 @@
         #history-list li { padding: 8px 0; border-bottom: 1px solid #3a3a3a; display: flex; justify-content: space-between; align-items: center;}
         #history-list li:last-child { border-bottom: none; }
         .history-time { color: #888; font-size: 0.9em; }
+
+        .version {
+            margin-top: 20px;
+            font-size: 0.8em;
+            color: #666;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -233,6 +239,8 @@
             <p id="location-container" style="display: none; font-size: 0.9em; color: #e0e0e0;">אזור משוער: <span id="location-val" style="font-weight: bold; color: #ffeb3b;">מחפש...</span></p>
         </div>
         
+        <div id="alert-status" style="display: none; background: rgba(40, 40, 50, 0.8); border: 1px solid #ffeb3b; color: #ffeb3b; padding: 10px; border-radius: 8px; font-size: 0.9em; margin-top: 15px;"></div>
+        
         <button id="btn-whatsapp" class="btn-whatsapp">שתף דיווח ב-WhatsApp 💬</button>
 
         <div id="history-container">
@@ -240,6 +248,8 @@
             <button id="btn-reset" class="btn-reset">איפוס מדידות 🗑️</button>
             <ul id="history-list"></ul>
         </div>
+        
+        <div class="version">גרסה 1.0</div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -346,6 +356,9 @@
         window.addEventListener('deviceorientation', handleContinuousOrientation);
 
         let isCompassUpdating = false;
+        let currentVisualBearing = null;
+        const COMPASS_SMOOTHING_FACTOR = 0.15; // פקטור החלקה לקבלת תנועה חלקה ויציבה
+
         function handleContinuousOrientation(event) {
             let bearing = null;
             if (event.webkitCompassHeading) { bearing = event.webkitCompassHeading; } 
@@ -353,14 +366,28 @@
             else if (event.alpha !== null) { bearing = 360 - event.alpha; } // גיבוי
             
             if (bearing !== null) {
-                continuousBearing = bearing;
+                if (currentVisualBearing === null) {
+                    currentVisualBearing = bearing;
+                } else {
+                    // חישוב המרחק הקצר ביותר בין הזוויות למניעת סחרור כשעוברים את ה-360 מעלות
+                    let diff = bearing - (currentVisualBearing % 360);
+                    if (diff < -180) diff += 360;
+                    if (diff > 180) diff -= 360;
+                    
+                    // הפעלת פילטר החלקה (Low-Pass Filter)
+                    currentVisualBearing += diff * COMPASS_SMOOTHING_FACTOR;
+                }
+                
+                // שמירת הכיוון המנורמל עבור החישובים המתמטיים (0-360)
+                continuousBearing = ((currentVisualBearing % 360) + 360) % 360;
+
                 if (!isCompassUpdating) {
                     isCompassUpdating = true;
                     requestAnimationFrame(() => {
                         const cone = document.getElementById('direction-cone');
                         if (cone) {
                             cone.style.display = 'block';
-                            cone.style.transform = `rotate(${continuousBearing}deg)`;
+                            cone.style.transform = `rotate(${currentVisualBearing}deg)`;
                         }
                         document.getElementById('btn-enable-compass').style.display = 'none';
                         isCompassUpdating = false;
