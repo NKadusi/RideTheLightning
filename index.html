@@ -256,7 +256,7 @@
             <ul id="history-list"></ul>
         </div>
         
-        <div class="version">גרסה 1.8.14</div>
+        <div class="version">גרסה 1.8.15</div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -379,9 +379,9 @@
         window.addEventListener('deviceorientationabsolute', handleContinuousOrientation);
         window.addEventListener('deviceorientation', handleContinuousOrientation);
 
-        let isCompassUpdating = false;
+        let targetBearing = null;
         let currentVisualBearing = null;
-        const COMPASS_SMOOTHING_FACTOR = 0.05; // פקטור החלקה מוקטן לסינון רעידות המכשיר
+        let isAnimationRunning = false;
 
         function handleContinuousOrientation(event) {
             let bearing = null;
@@ -390,36 +390,41 @@
             else if (event.alpha !== null) { bearing = 360 - event.alpha; } // גיבוי
             
             if (bearing !== null) {
+                targetBearing = bearing;
+                if (!isAnimationRunning) {
+                    isAnimationRunning = true;
+                    requestAnimationFrame(updateCompassAnimation);
+                }
+            }
+        }
+
+        // לולאת אנימציה נפרדת לחיווי מצפן חלק במיוחד (מנותקת מקצב אירועי החיישן)
+        function updateCompassAnimation() {
+            if (targetBearing !== null) {
                 if (currentVisualBearing === null) {
-                    currentVisualBearing = bearing;
+                    currentVisualBearing = targetBearing;
                 } else {
-                    // חישוב המרחק הקצר ביותר בין הזוויות למניעת סחרור כשעוברים את ה-360 מעלות
-                    let diff = bearing - (currentVisualBearing % 360);
+                    let diff = targetBearing - (currentVisualBearing % 360);
                     if (diff < -180) diff += 360;
                     if (diff > 180) diff -= 360;
                     
-                    // הפעלת פילטר החלקה (Low-Pass Filter)
-                    if (Math.abs(diff) > 0.5) { // התעלמות מתנודות קטנות כדי למנוע רעידות חזותיות
-                        currentVisualBearing += diff * COMPASS_SMOOTHING_FACTOR;
-                    }
+                    // פילטר Lerp (Linear Interpolation) להחלקה מקסימלית בלי קפיצות
+                    currentVisualBearing += diff * 0.08; 
                 }
                 
-                // שמירת הכיוון המנורמל עבור החישובים המתמטיים (0-360)
                 continuousBearing = ((currentVisualBearing % 360) + 360) % 360;
 
-                if (!isCompassUpdating) {
-                    isCompassUpdating = true;
-                    requestAnimationFrame(() => {
-                        const cone = document.getElementById('direction-cone');
-                        if (cone) {
-                            cone.style.display = 'block';
-                            cone.style.transform = `rotate(${currentVisualBearing.toFixed(1)}deg)`;
-                        }
-                        document.getElementById('btn-enable-compass').style.display = 'none';
-                        isCompassUpdating = false;
-                    });
+                const cone = document.getElementById('direction-cone');
+                if (cone) {
+                    cone.style.display = 'block';
+                    // שימוש ב-toFixed(2) למניעת ריצוד מיקרוסקופי הנגרם מעיגול גס
+                    cone.style.transform = `rotate(${currentVisualBearing.toFixed(2)}deg)`;
                 }
+                
+                const btnEnable = document.getElementById('btn-enable-compass');
+                if(btnEnable.style.display !== 'none') btnEnable.style.display = 'none';
             }
+            requestAnimationFrame(updateCompassAnimation); // לולאה אינסופית חלקה
         }
 
         // פונקציית עזר לציור קרן הכיוון הנעולה
