@@ -117,10 +117,11 @@
             flex: 1;
             min-height: 250px;
             width: 100%;
+            flex-direction: column;
         }
 
         #map { 
-            height: 100%; 
+            flex: 1; 
             width: 100%; 
             z-index: 1; 
             filter: invert(90%) hue-rotate(180deg) brightness(95%) contrast(85%);
@@ -255,7 +256,7 @@
             <ul id="history-list"></ul>
         </div>
         
-        <div class="version">גרסה 1.8.11</div>
+        <div class="version">גרסה 1.8.12</div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -325,7 +326,7 @@
         requestLocation();
 
         function initMap(lat, lng) {
-            document.getElementById('map-wrapper').style.display = 'block';
+            document.getElementById('map-wrapper').style.display = 'flex';
             // אילוץ הדפדפן לחשב את המידות מחדש לפני טעינת המפה
             void document.getElementById('map-wrapper').offsetWidth;
             
@@ -351,6 +352,9 @@
                 setTimeout(() => { 
                     if(map) map.invalidateSize(); 
                 }, 500);
+                setTimeout(() => { 
+                    if(map) map.invalidateSize(); 
+                }, 1500); // גיבוי נוסף לרינדור של דפדפנים איטיים
             }
         }
         
@@ -661,11 +665,12 @@
 
             // מנגנון גיבוי חכם: ניסיון משיכה ממספר שרתי פרוקסי שונים למקרה שאחד מהם נופל או נחסם
             const cb = new Date().getTime(); // חותמת זמן שמונעת משרתי הפרוקסי לשמור עותק ישן
-            const orefUrl = 'https://www.oref.org.il/WarningMessages/History/AlertsHistory.json';
+            // הוספת חותמת זמן גם לכתובת הפנימית כדי לעקוף את מנגנון ה-Cache של Akamai (שרתי פיקוד העורף)
+            const orefUrl = `https://www.oref.org.il/WarningMessages/History/AlertsHistory.json?v=${cb}`;
             const proxies = [
-                `https://api.allorigins.win/raw?url=${encodeURIComponent(orefUrl)}&disableCache=true&cb=${cb}`, // אופציה 1 עם דרישת רענון תמידית
+                `https://api.allorigins.win/get?url=${encodeURIComponent(orefUrl)}&disableCache=true`, // שימוש ב-get לעקיפת חסימות דפדפן
                 `https://api.codetabs.com/v1/proxy?quest=${orefUrl}&cb=${cb}`,                                  // אופציה 2 עוקפת קאש
-                `https://corsproxy.io/?${encodeURIComponent(orefUrl)}`               // אופציה 3: הפרוקסי הקודם כגיבוי אחרון
+                `https://corsproxy.io/?${encodeURIComponent(orefUrl)}`                                          // אופציה 3 כגיבוי אחרון
             ];
 
             (async function fetchWithFallback() {
@@ -677,10 +682,18 @@
                         if (!response.ok) continue;
                         
                         const textData = await response.text();
-                        // פיקוד העורף מחזיר לעיתים מחרוזת ריקה אם אין התרעות, או JSON תקין
                         let alerts = [];
-                        if (textData.trim().startsWith('[')) {
-                            alerts = JSON.parse(textData);
+                        
+                        try {
+                            const parsed = JSON.parse(textData);
+                            // תמיכה בפורמט העטוף של allorigins
+                            if (parsed && parsed.contents) {
+                                alerts = JSON.parse(parsed.contents);
+                            } else if (Array.isArray(parsed)) {
+                                alerts = parsed;
+                            }
+                        } catch(e) {
+                            console.warn("שגיאה בפענוח JSON מהפרוקסי");
                         }
                         
                         if (Array.isArray(alerts)) {
@@ -712,8 +725,8 @@
                 const diffMinutes = (now - alertTime) / (1000 * 60);
 
                 // סינון: מתעלם מפערי סנכרון שעונים בין הטלפון לשרת ומקבל אזעקות גם אם השעון בטלפון מפגר
-                // מושך התרעות עד 15 דקות אחורה
-                if (diffMinutes >= -15 && diffMinutes <= 15) {
+                // הרחבנו ל-60 דקות אחורה כדי לכסות בוודאות אירועים אחרונים ולפצות על עיכובים בדיווח
+                if (diffMinutes >= -60 && diffMinutes <= 60) {
                     recentCities.add(alert.data); // alert.data מכיל את שם היישוב
                 }
             });
@@ -722,7 +735,7 @@
             if (recentCities.size > 0) {
                 alertStatusEl.style.display = 'block';
                 alertStatusEl.style.cursor = 'pointer';
-                alertStatusEl.innerHTML = `נמצאו ${recentCities.size} אזורי התרעה ב-15 הדקות האחרונות 🚨<br><span style="font-size: 0.85em; color: #ccc;">(לחץ כדי למרכז את המפה עליהן)</span>`;
+                alertStatusEl.innerHTML = `נמצאו ${recentCities.size} אזורי התרעה ב-60 הדקות האחרונות 🚨<br><span style="font-size: 0.85em; color: #ccc;">(לחץ כדי למרכז את המפה עליהן)</span>`;
                 alertStatusEl.onclick = () => {
                     if (alertLayers.length > 0) {
                         const group = L.featureGroup(alertLayers);
@@ -733,7 +746,7 @@
                 alertStatusEl.style.display = 'block';
                 alertStatusEl.style.cursor = 'default';
                 alertStatusEl.onclick = null;
-                alertStatusEl.innerText = `לא נמצאו התרעות ב-15 הדקות האחרונות ✅`;
+                alertStatusEl.innerText = `לא נמצאו התרעות ב-60 הדקות האחרונות ✅`;
                 setTimeout(() => { alertStatusEl.style.display = 'none'; }, 5000); // מסתיר את ההודעה אחרי 5 שניות אם הכל שקט
             }
 
