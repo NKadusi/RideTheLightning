@@ -256,7 +256,7 @@
             <ul id="history-list"></ul>
         </div>
         
-        <div class="version">גרסה 1.8.12</div>
+        <div class="version">גרסה 1.8.13</div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -668,8 +668,8 @@
             // הוספת חותמת זמן גם לכתובת הפנימית כדי לעקוף את מנגנון ה-Cache של Akamai (שרתי פיקוד העורף)
             const orefUrl = `https://www.oref.org.il/WarningMessages/History/AlertsHistory.json?v=${cb}`;
             const proxies = [
-                `https://api.allorigins.win/get?url=${encodeURIComponent(orefUrl)}&disableCache=true`, // שימוש ב-get לעקיפת חסימות דפדפן
-                `https://api.codetabs.com/v1/proxy?quest=${orefUrl}&cb=${cb}`,                                  // אופציה 2 עוקפת קאש
+                `https://api.codetabs.com/v1/proxy?quest=${orefUrl}`,                                  // אופציה 1 - מהיר ואמין יותר בדרך כלל
+                `https://api.allorigins.win/get?url=${encodeURIComponent(orefUrl)}&disableCache=true`, // אופציה 2
                 `https://corsproxy.io/?${encodeURIComponent(orefUrl)}`                                          // אופציה 3 כגיבוי אחרון
             ];
 
@@ -687,13 +687,14 @@
                         try {
                             const parsed = JSON.parse(textData);
                             // תמיכה בפורמט העטוף של allorigins
-                            if (parsed && parsed.contents) {
+                            if (parsed && parsed.contents !== undefined) {
+                                if (parsed.contents === null || parsed.contents === '') throw new Error("Empty wrapper");
                                 alerts = JSON.parse(parsed.contents);
                             } else if (Array.isArray(parsed)) {
                                 alerts = parsed;
                             }
                         } catch(e) {
-                            console.warn("שגיאה בפענוח JSON מהפרוקסי");
+                            console.warn("שגיאה בפענוח JSON או שרת החזיר תוכן ריק");
                         }
                         
                         if (Array.isArray(alerts)) {
@@ -718,16 +719,33 @@
             if (!Array.isArray(alerts)) return;
             const now = new Date();
             const recentCities = new Set();
+            let validAlertsCount = 0;
 
             alerts.forEach(alert => {
-                // המרת תאריך למבנה בטוח (החלפת מקפים בלוכסנים למניעת שגיאות בדפדפנים מסוימים)
-                const alertTime = new Date(alert.date.replace(/-/g, '/'));
+                if (!alert.date || !alert.data) return;
+                validAlertsCount++;
+
+                let alertTime;
+                // מנגנון חכם לחילוץ רכיבי התאריך שמתגבר על שינויי הפורמט של פיקוד העורף (DD/MM/YYYY לעומת YYYY-MM-DD)
+                const parts = alert.date.match(/(\d+)/g);
+                if (parts && parts.length >= 6) {
+                    let p1 = parseInt(parts[0], 10), p2 = parseInt(parts[1], 10), p3 = parseInt(parts[2], 10);
+                    let year = p1 > 1000 ? p1 : (p3 > 1000 ? p3 : new Date().getFullYear());
+                    let month = p1 > 1000 ? p2 : p2;
+                    let day = p1 > 1000 ? p3 : p1;
+                    alertTime = new Date(year, month - 1, day, parseInt(parts[3], 10), parseInt(parts[4], 10), parseInt(parts[5], 10));
+                } else {
+                    alertTime = new Date(alert.date.replace(/-/g, '/')); // גיבוי
+                }
+
+                if (isNaN(alertTime.getTime())) return;
+
                 const diffMinutes = (now - alertTime) / (1000 * 60);
 
-                // סינון: מתעלם מפערי סנכרון שעונים בין הטלפון לשרת ומקבל אזעקות גם אם השעון בטלפון מפגר
-                // הרחבנו ל-60 דקות אחורה כדי לכסות בוודאות אירועים אחרונים ולפצות על עיכובים בדיווח
-                if (diffMinutes >= -60 && diffMinutes <= 60) {
-                    recentCities.add(alert.data); // alert.data מכיל את שם היישוב
+                // מאפשר חריגת זמנים עד שעתיים (120 דק') כדי להתגבר על קפיצות אזורי זמן בטלפונים שונים
+                if (diffMinutes >= -120 && diffMinutes <= 120) {
+                    // לעיתים פיקוד העורף דוחף כמה ערים בהתרעה אחת מופרדות בפסיק
+                    alert.data.split(',').forEach(city => recentCities.add(city.trim()));
                 }
             });
 
@@ -735,7 +753,7 @@
             if (recentCities.size > 0) {
                 alertStatusEl.style.display = 'block';
                 alertStatusEl.style.cursor = 'pointer';
-                alertStatusEl.innerHTML = `נמצאו ${recentCities.size} אזורי התרעה ב-60 הדקות האחרונות 🚨<br><span style="font-size: 0.85em; color: #ccc;">(לחץ כדי למרכז את המפה עליהן)</span>`;
+                alertStatusEl.innerHTML = `נמצאו ${recentCities.size} אזורי התרעה עדכניים 🚨<br><span style="font-size: 0.85em; color: #ccc;">(לחץ כדי למרכז את המפה עליהן)</span>`;
                 alertStatusEl.onclick = () => {
                     if (alertLayers.length > 0) {
                         const group = L.featureGroup(alertLayers);
@@ -746,8 +764,12 @@
                 alertStatusEl.style.display = 'block';
                 alertStatusEl.style.cursor = 'default';
                 alertStatusEl.onclick = null;
-                alertStatusEl.innerText = `לא נמצאו התרעות ב-60 הדקות האחרונות ✅`;
-                setTimeout(() => { alertStatusEl.style.display = 'none'; }, 5000); // מסתיר את ההודעה אחרי 5 שניות אם הכל שקט
+                if (validAlertsCount > 0) {
+                    alertStatusEl.innerText = `הכל שקט ✅ (נסרקו ${validAlertsCount} התרעות ישנות מהיום)`;
+                } else {
+                    alertStatusEl.innerText = `לא נמצאו התרעות כלל בשרת ✅`;
+                }
+                setTimeout(() => { alertStatusEl.style.display = 'none'; }, 6000);
             }
 
             // המרת שמות יישובים לקואורדינטות עם השהייה קלה (כדי לא להיחסם ב-OpenStreetMap)
