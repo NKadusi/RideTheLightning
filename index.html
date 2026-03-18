@@ -255,7 +255,7 @@
             <ul id="history-list"></ul>
         </div>
         
-        <div class="version">גרסה 1.8.10</div>
+        <div class="version">גרסה 1.8.11</div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -326,6 +326,9 @@
 
         function initMap(lat, lng) {
             document.getElementById('map-wrapper').style.display = 'block';
+            // אילוץ הדפדפן לחשב את המידות מחדש לפני טעינת המפה
+            void document.getElementById('map-wrapper').offsetWidth;
+            
             if (!map) {
                 map = L.map('map').setView([lat, lng], 13);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
@@ -345,7 +348,9 @@
                 fetchAndDrawRecentAlerts();
 
                 // אילוץ של המפה לחשב מחדש את הגודל שלה אחרי פריסת הפלקסבוקס
-                setTimeout(() => { map.invalidateSize(); }, 300);
+                setTimeout(() => { 
+                    if(map) map.invalidateSize(); 
+                }, 500);
             }
         }
         
@@ -655,10 +660,11 @@
             alertLayers = [];
 
             // מנגנון גיבוי חכם: ניסיון משיכה ממספר שרתי פרוקסי שונים למקרה שאחד מהם נופל או נחסם
+            const cb = new Date().getTime(); // חותמת זמן שמונעת משרתי הפרוקסי לשמור עותק ישן
             const orefUrl = 'https://www.oref.org.il/WarningMessages/History/AlertsHistory.json';
             const proxies = [
-                `https://api.allorigins.win/raw?url=${encodeURIComponent(orefUrl)}`, // אופציה 1: מחזיר JSON נקי ללא עטיפה
-                `https://api.codetabs.com/v1/proxy?quest=${orefUrl}`,                // אופציה 2: פרוקסי חלופי אמין
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(orefUrl)}&disableCache=true&cb=${cb}`, // אופציה 1 עם דרישת רענון תמידית
+                `https://api.codetabs.com/v1/proxy?quest=${orefUrl}&cb=${cb}`,                                  // אופציה 2 עוקפת קאש
                 `https://corsproxy.io/?${encodeURIComponent(orefUrl)}`               // אופציה 3: הפרוקסי הקודם כגיבוי אחרון
             ];
 
@@ -705,8 +711,9 @@
                 const alertTime = new Date(alert.date.replace(/-/g, '/'));
                 const diffMinutes = (now - alertTime) / (1000 * 60);
 
-                // סינון: רק אזעקות מה-15 דקות האחרונות
-                if (diffMinutes >= 0 && diffMinutes <= 15) {
+                // סינון: מתעלם מפערי סנכרון שעונים בין הטלפון לשרת ומקבל אזעקות גם אם השעון בטלפון מפגר
+                // מושך התרעות עד 15 דקות אחורה
+                if (diffMinutes >= -15 && diffMinutes <= 15) {
                     recentCities.add(alert.data); // alert.data מכיל את שם היישוב
                 }
             });
