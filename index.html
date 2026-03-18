@@ -256,7 +256,7 @@
             <ul id="history-list"></ul>
         </div>
         
-        <div class="version">גרסה 1.8.13</div>
+        <div class="version">גרסה 1.8.14</div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -274,6 +274,8 @@
         let userDirectionMarker = null;
         let lockedDirectionLine = null;
         let alertLayers = []; // מערך לשמירת אזורי ההתרעה על המפה
+        let realTimeCities = new Set(); // אזעקות זמן אמת שנלכדו
+        let pollingInterval = null; // טיימר דגימה
         const cityCoordinatesCache = {}; // מטמון לשמירת קואורדינטות של ערים למניעת עומס
 
         function formatNumber(num) { return num.toLocaleString('he-IL'); }
@@ -345,8 +347,9 @@
                     document.getElementById('btn-enable-compass').style.display = 'block';
                 }
 
-                // משיכת התרעות אמת מיד עם טעינת המפה
-                fetchAndDrawRecentAlerts();
+                // הפעלת דגימה מחזורית של התרעות זמן-אמת
+                checkRealTimeAlerts();
+                if (!pollingInterval) pollingInterval = setInterval(checkRealTimeAlerts, 5000);
 
                 // אילוץ של המפה לחשב מחדש את הגודל שלה אחרי פריסת הפלקסבוקס
                 setTimeout(() => { 
@@ -436,8 +439,8 @@
             btn.style.transform = 'rotate(180deg)';
             setTimeout(() => btn.style.transform = 'none', 300); // איפוס הסיבוב לאנימציה הבאה
             document.getElementById('alert-status').style.display = 'block';
-            document.getElementById('alert-status').innerText = 'מרענן התרעות מפיקוד העורף... ⏳';
-            fetchAndDrawRecentAlerts();
+            document.getElementById('alert-status').innerText = 'בודק התרעות זמן-אמת... ⏳';
+            checkRealTimeAlerts();
         });
 
         // כפתור: ראיתי הבזק
@@ -552,9 +555,6 @@
 
             if (savedLat && savedLng) {
                 drawMapFeatures(distanceMeters, savedBearing);
-                
-                // קריאה לפונקציה שמחפשת ומציירת את אזעקות האמת מהדקות האחרונות
-                fetchAndDrawRecentAlerts();
             }
         
         // מעקב גוגל אנליטיקס ללחיצה על כפתור הפיצוץ (כולל נתוני המדידה)
@@ -588,6 +588,7 @@
             // מחיקת אזורי אזעקה קודמים
             alertLayers.forEach(layer => map.removeLayer(layer));
             alertLayers = [];
+            realTimeCities.clear();
             
             if (userLat && userLng) {
                 map.setView([userLat, userLng], 13);
@@ -658,126 +659,60 @@
             map.fitBounds(boundsToFit);
         }
 
-        // משיכת התרעות אמת מפיקוד העורף וציורן
-        function fetchAndDrawRecentAlerts() {
-            alertLayers.forEach(layer => map.removeLayer(layer));
-            alertLayers = [];
-
-            // מנגנון גיבוי חכם: ניסיון משיכה ממספר שרתי פרוקסי שונים למקרה שאחד מהם נופל או נחסם
-            const cb = new Date().getTime(); // חותמת זמן שמונעת משרתי הפרוקסי לשמור עותק ישן
-            // הוספת חותמת זמן גם לכתובת הפנימית כדי לעקוף את מנגנון ה-Cache של Akamai (שרתי פיקוד העורף)
-            const orefUrl = `https://www.oref.org.il/WarningMessages/History/AlertsHistory.json?v=${cb}`;
+        // דגימה (Polling) של התרעות בזמן אמת מפיקוד העורף
+        function checkRealTimeAlerts() {
+            const cb = new Date().getTime(); // חותמת זמן למניעת קאש
+            const orefUrl = `https://www.oref.org.il/WarningMessages/Alert/alerts.json?v=${cb}`;
             const proxies = [
-                `https://api.codetabs.com/v1/proxy?quest=${orefUrl}`,                                  // אופציה 1 - מהיר ואמין יותר בדרך כלל
-                `https://api.allorigins.win/get?url=${encodeURIComponent(orefUrl)}&disableCache=true`, // אופציה 2
-                `https://corsproxy.io/?${encodeURIComponent(orefUrl)}`                                          // אופציה 3 כגיבוי אחרון
+                `https://api.allorigins.win/get?url=${encodeURIComponent(orefUrl)}&disableCache=true`,
+                `https://api.codetabs.com/v1/proxy?quest=${orefUrl}&cb=${cb}`
             ];
 
-            (async function fetchWithFallback() {
-                let success = false;
-                for (const proxyUrl of proxies) {
+            const tryFetch = async (index) => {
+                if (index >= proxies.length) return;
+                try {
+                    const response = await fetch(proxies[index], { cache: 'no-store' });
+                    if (!response.ok) throw new Error("HTTP Status Error");
+                    
+                    const textData = await response.text();
+                    if (!textData || textData.trim() === '') return; // שרת החזיר תוכן ריק = אין אזעקות פעילות כרגע
+                    
+                    let alertData = null;
                     try {
-                        // הסרנו הדרים מותאמים אישית כדי למנוע בקשות Preflight (OPTIONS) שהדפדפן שולח ועלולות להיחסם
-                        const response = await fetch(proxyUrl, { cache: 'no-store' });
-                        if (!response.ok) continue;
-                        
-                        const textData = await response.text();
-                        let alerts = [];
-                        
-                        try {
-                            const parsed = JSON.parse(textData);
-                            // תמיכה בפורמט העטוף של allorigins
-                            if (parsed && parsed.contents !== undefined) {
-                                if (parsed.contents === null || parsed.contents === '') throw new Error("Empty wrapper");
-                                alerts = JSON.parse(parsed.contents);
-                            } else if (Array.isArray(parsed)) {
-                                alerts = parsed;
-                            }
-                        } catch(e) {
-                            console.warn("שגיאה בפענוח JSON או שרת החזיר תוכן ריק");
+                        const parsed = JSON.parse(textData);
+                        if (parsed && parsed.contents !== undefined) {
+                            if (parsed.contents) alertData = JSON.parse(parsed.contents);
+                        } else {
+                            alertData = parsed;
                         }
+                    } catch(e) {}
+                    
+                    if (alertData && alertData.data && Array.isArray(alertData.data)) {
+                        let newFound = false;
+                        alertData.data.forEach(cityStr => {
+                            cityStr.split(',').forEach(c => {
+                                const city = c.trim();
+                                if (!realTimeCities.has(city)) {
+                                    realTimeCities.add(city);
+                                    newFound = true;
+                                    geocodeAndDrawAlert(city);
+                                }
+                            });
+                        });
                         
-                        if (Array.isArray(alerts)) {
-                            processAlerts(alerts);
-                            success = true;
-                            break; // הצלחנו! יוצאים מהלולאה ולא מנסים את השרתים הבאים
+                        if (newFound) {
+                            const alertStatusEl = document.getElementById('alert-status');
+                            alertStatusEl.style.display = 'block';
+                            alertStatusEl.innerHTML = `אזעקת אמת פעילה כעת! 🚨<br><span style="font-size: 0.85em; color: #ccc;">(האזורים התווספו למפה לטובת הצלבה בהמשך)</span>`;
+                            setTimeout(() => { alertStatusEl.style.display = 'none'; }, 6000);
                         }
-                    } catch (error) {
-                        console.warn(`Proxy failed: ${proxyUrl}`);
                     }
+                } catch (error) {
+                    tryFetch(index + 1);
                 }
-
-                if (!success) {
-                    console.error("שגיאה במשיכת התרעות מכל שרתי הפרוקסי");
-                    document.getElementById('alert-status').style.display = 'block';
-                    document.getElementById('alert-status').innerText = "שגיאה בתקשורת מול פיקוד העורף (נסה שוב מאוחר יותר) ❌";
-                }
-            })();
-        }
-
-        function processAlerts(alerts) {
-            if (!Array.isArray(alerts)) return;
-            const now = new Date();
-            const recentCities = new Set();
-            let validAlertsCount = 0;
-
-            alerts.forEach(alert => {
-                if (!alert.date || !alert.data) return;
-                validAlertsCount++;
-
-                let alertTime;
-                // מנגנון חכם לחילוץ רכיבי התאריך שמתגבר על שינויי הפורמט של פיקוד העורף (DD/MM/YYYY לעומת YYYY-MM-DD)
-                const parts = alert.date.match(/(\d+)/g);
-                if (parts && parts.length >= 6) {
-                    let p1 = parseInt(parts[0], 10), p2 = parseInt(parts[1], 10), p3 = parseInt(parts[2], 10);
-                    let year = p1 > 1000 ? p1 : (p3 > 1000 ? p3 : new Date().getFullYear());
-                    let month = p1 > 1000 ? p2 : p2;
-                    let day = p1 > 1000 ? p3 : p1;
-                    alertTime = new Date(year, month - 1, day, parseInt(parts[3], 10), parseInt(parts[4], 10), parseInt(parts[5], 10));
-                } else {
-                    alertTime = new Date(alert.date.replace(/-/g, '/')); // גיבוי
-                }
-
-                if (isNaN(alertTime.getTime())) return;
-
-                const diffMinutes = (now - alertTime) / (1000 * 60);
-
-                // מאפשר חריגת זמנים עד שעתיים (120 דק') כדי להתגבר על קפיצות אזורי זמן בטלפונים שונים
-                if (diffMinutes >= -120 && diffMinutes <= 120) {
-                    // לעיתים פיקוד העורף דוחף כמה ערים בהתרעה אחת מופרדות בפסיק
-                    alert.data.split(',').forEach(city => recentCities.add(city.trim()));
-                }
-            });
-
-            const alertStatusEl = document.getElementById('alert-status');
-            if (recentCities.size > 0) {
-                alertStatusEl.style.display = 'block';
-                alertStatusEl.style.cursor = 'pointer';
-                alertStatusEl.innerHTML = `נמצאו ${recentCities.size} אזורי התרעה עדכניים 🚨<br><span style="font-size: 0.85em; color: #ccc;">(לחץ כדי למרכז את המפה עליהן)</span>`;
-                alertStatusEl.onclick = () => {
-                    if (alertLayers.length > 0) {
-                        const group = L.featureGroup(alertLayers);
-                        map.fitBounds(group.getBounds(), { padding: [30, 30] });
-                    }
-                };
-            } else {
-                alertStatusEl.style.display = 'block';
-                alertStatusEl.style.cursor = 'default';
-                alertStatusEl.onclick = null;
-                if (validAlertsCount > 0) {
-                    alertStatusEl.innerText = `הכל שקט ✅ (נסרקו ${validAlertsCount} התרעות ישנות מהיום)`;
-                } else {
-                    alertStatusEl.innerText = `לא נמצאו התרעות כלל בשרת ✅`;
-                }
-                setTimeout(() => { alertStatusEl.style.display = 'none'; }, 6000);
-            }
-
-            // המרת שמות יישובים לקואורדינטות עם השהייה קלה (כדי לא להיחסם ב-OpenStreetMap)
-            let delay = 0;
-            recentCities.forEach(cityName => {
-                setTimeout(() => geocodeAndDrawAlert(cityName), delay);
-                delay += 1100; 
-            });
+            };
+            
+            tryFetch(0);
         }
 
         function geocodeAndDrawAlert(cityName) {
